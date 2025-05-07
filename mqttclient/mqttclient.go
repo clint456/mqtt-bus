@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/signal"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -190,50 +188,40 @@ func (c *MQTTClient) Start() error {
 		go c.startPublishing()
 	}
 
-	// 监听系统信号
-	go c.handleSignals()
-
 	return nil
 }
 
-// handleMessages 处理接收到的消息
 func (c *MQTTClient) handleMessages() {
 	defer c.wg.Done()
 	for {
 		select {
 		case err := <-c.messageErrs:
 			c.logger.Error(fmt.Sprintf("接收消息错误: %v", err))
-
 		case msg := <-c.messages:
 			c.logger.Info(fmt.Sprintf("收到消息 - 主题: %s, 关联ID: %s", msg.ReceivedTopic, msg.CorrelationID))
-
 			if msg.ContentType != "application/json" {
 				c.logger.Error(fmt.Sprintf("无效的内容类型: 收到 %s, 期望 application/json", msg.ContentType))
 				continue
 			}
-
 			var event dtos.Event
 			if err := json.Unmarshal(msg.Payload, &event); err != nil {
 				c.logger.Error(fmt.Sprintf("解析事件失败: %v", err))
 				continue
 			}
-
 			if c.handler != nil {
 				c.handler(msg.ReceivedTopic, event)
 			}
-
 		case <-c.stopCh:
+			c.logger.Info("消息处理 goroutine 停止")
 			return
 		}
 	}
 }
 
-// startPublishing 定时发布测试消息
 func (c *MQTTClient) startPublishing() {
 	defer c.wg.Done()
 	ticker := time.NewTicker(time.Duration(c.config.Interval) * time.Second)
 	defer ticker.Stop()
-
 	for {
 		select {
 		case <-ticker.C:
@@ -241,6 +229,7 @@ func (c *MQTTClient) startPublishing() {
 				c.logger.Error(err.Error())
 			}
 		case <-c.stopCh:
+			c.logger.Info("发布 goroutine 停止")
 			return
 		}
 	}
@@ -313,19 +302,21 @@ func (c *MQTTClient) PublishEvent(event dtos.Event, topic string) error {
 
 // Stop 停止客户端
 func (c *MQTTClient) Stop() {
+	c.logger.Info("开始停止 MQTT 客户端...")
 	close(c.stopCh)
 	if err := c.messageBus.Disconnect(); err != nil {
 		c.logger.Error(fmt.Sprintf("断开消息总线失败: %v", err))
 	}
-	c.wg.Wait()
-	c.logger.Info("MQTT客户端已停止")
-}
-
-// handleSignals 处理系统信号
-func (c *MQTTClient) handleSignals() {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	<-sigChan
-	c.logger.Info("收到终止信号，正在停止...")
-	c.Stop()
+	done := make(chan struct{})
+	go func() {
+		c.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		c.logger.Info("所有 goroutine 已退出")
+	case <-time.After(5 * time.Second):
+		c.logger.Warn("停止超时，可能有 goroutine 未退出")
+	}
+	c.logger.Info("MQTT 客户端已停止")
 }

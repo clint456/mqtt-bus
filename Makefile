@@ -1,8 +1,8 @@
 # Makefile for mqtt-bus project
 
 # 项目名称和输出二进制文件路径
-BINARY_NAME = message-bus-client
-OUTPUT_DIR = edgex-client
+BINARY_NAME = mqtt-bus
+OUTPUT_DIR = mqtt-bus
 BINARY_PATH194 = $(OUTPUT_DIR)/$(BINARY_NAME)
 
 # Go 相关命令
@@ -24,12 +24,12 @@ all: build
 # 编译项目
 .PHONY: build
 build:
-	$(GO_BUILD_ENV) $(GO_BUILD) $(GO_BUILD_FLAGS) ./edgex-client
+	$(GO_BUILD_ENV) $(GO_BUILD) $(GO_BUILD_FLAGS) $(BINARY_PATH194)
 	
 # 运行项目
 .PHONY: run
 run: build
-	./$(BINARY_PATH)
+	./$(BINARY_PATH194)
 
 # 测试项目
 .PHONY: test
@@ -40,7 +40,7 @@ test:
 .PHONY: clean
 clean:
 	$(GO_CLEAN)
-	rm -f $(BINARY_PATH)
+	rm -rf $(BINARY_PATH194)
 
 # 更新 Go 模块依赖
 .PHONY: tidy

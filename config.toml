@@ -9,5 +9,5 @@ client_id = "EdgeXClient-Test"
 username = "your-username"  # 可选
 password = "your-password"  # 可选
 publish = true
-publish_interval = 10
+publish_interval = 1
 log_level = "INFO"
